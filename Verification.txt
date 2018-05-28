@@ -1,0 +1,276 @@
+";path=/"; 指定保存cookie路径，防止路径不对导致获取不到对应的cookie值
+
+
+//发送验证码时添加cookie
+function addCookie(name,value,expiresHours){ 
+    var cookieString=name+"="+escape(value); 
+    //判断是否设置过期时间,0代表关闭浏览器时失效
+    if(expiresHours>0){ 
+        var date=new Date(); 
+        date.setTime(date.getTime()+expiresHours*1000); 
+        cookieString=cookieString+";expires=" + date.toUTCString()+";path=/"; 
+    } 
+        document.cookie=cookieString; 
+} 
+//修改cookie的值
+function editCookie(name,value,expiresHours){ 
+    var cookieString=name+"="+escape(value); 
+    if(expiresHours>0){ 
+      var date=new Date(); 
+      date.setTime(date.getTime()+expiresHours*1000); //单位是毫秒
+      cookieString=cookieString+";expires=" + date.toGMTString()+";path=/"; 
+    } 
+      document.cookie=cookieString; 
+} 
+//根据名字获取cookie的值
+function getCookieValue(name){ 
+      var strCookie=document.cookie; 
+      var arrCookie=strCookie.split("; "); 
+      for(var i=0;i<arrCookie.length;i++){ 
+        var arr=arrCookie[i].split("="); 
+        if(arr[0]==name){
+          return unescape(arr[1]);
+          break;
+        }
+     }        
+}
+
+//---------------/----------------------------------------------
+$(function(){
+    $("#checkPhone").click(function (){
+        sendCode($("#checkPhone"));
+    });
+    v = getCookieValue("secondsremained")? getCookieValue("secondsremained"):0;//获取cookie值
+    if(v>0){
+        settime();//开始倒计时
+    }
+})
+//发送验证码
+function sendCode(obj){
+	var _this = $("#phone");
+    var result = isPhoneNum();
+    if(result){
+    	//setCaptcha(_this);
+        addCookie("secondsremained",10,60);//添加cookie记录,有效时间60s
+        settime();//开始倒计时
+    }
+}
+
+//开始倒计时
+var countdown;
+function settime() { 
+	var obj=$("#checkPhone");
+    countdown=getCookieValue("secondsremained");
+    if (countdown == 0) { 
+    	obj.bind("click",function(){
+    		 sendCode($("#checkPhone"));
+    	});
+        obj.text("发送验证码");
+        obj.css({"background":"#368bec","color":"#fff"});
+        return;
+    } else { 
+    	obj.unbind("click");
+        obj.attr("disabled", true); 
+        obj.text(countdown+"秒后重新发送"); 
+        countdown--;
+        obj.css({"background":"#d5d5d5","color":"#666"});
+        editCookie("secondsremained",countdown,countdown+2);
+    } 
+    setTimeout(function() { settime() },1000) //每1000毫秒执行一次
+} 
+//校验手机号是否合法
+function isPhoneNum(){
+	var _this = $("#phone");
+	var regular = /^[1][3,4,5,7,8][0-9]{9}$/;
+    if ($.trim(_this.val()) != '') {		
+		if (regular.test(_this.val())) {
+			$(".email-error").html(js_outlinkCheckCodeInPhone).show();
+			//setCaptcha(_this);
+			return true;
+		} else {
+			$(".email-error").html(js_PhoneFormatlIncorrect).show()
+					.fadeOut(3000);
+		
+			return false;
+		}
+	} else {
+	
+		$(".email-error").html(js_pleaseEnterPhone).show().fadeOut(3000);
+		return false;
+
+	}
+}
+
+//---------------------------------------------------------------
+
+	//生成验证码
+	function setCaptcha(_this) {
+		var b = new Base64();
+		var phone = b.encode(_this.val());
+		//$("#Captcha").show();
+		$.ajax({
+			type : "GET",
+			url : "/ajax/sendPhoneCode.action?phone=" + phone,
+			dataType : "json",
+			success : function(data) {
+				if ("SUCCESS" == data.status) {
+					$("#capId").val(data.capId);
+					//alert($("#capId").val()+" aaa");
+					//alert(data.capId+" ccc");
+					//$("#email").val(data.email);
+					//$("#captcha").val(data.captcha);
+				} else {
+					Dialog.alert(data.msg);
+				}
+			}
+		});
+	}
+	//校验验证码
+	function validateCap() {
+
+		//var capId = $("#capId").val();
+		var capId = "14";
+		var userid = $("#userid").val();
+		var captcha = $("input[name='captcha']");
+
+		if (captcha.val().replace(/\s+/g, '') === "") {
+			captcha.val('').focus();
+			$(".captcha-error").html(js_inputVerificationCode).show().fadeOut(
+					3000);
+			return;
+		}
+		$.ajax({
+			type : "post",
+			url : "/ajax/validateCapForPhone.action",
+			data : {
+				captcha : captcha.val(),
+				capId : capId
+			},
+			dataType : "json",
+			success : function(o) {
+				if (o.status === "SUCCESS") {
+
+					//加载修改密码页面
+					jOpenResetPassword(userid);
+
+				} else {
+					$(".captcha-error").html(o.msg).show().fadeOut(3000);
+				}
+			}
+		});
+	}
+
+	//修改密码 
+	function jOpenResetPassword(userid) {
+		var strongPassword = false;
+		var diag = new Dialog();
+		diag.Title = js_modifyPassword;//"修改登录密码";
+		diag.Width = 330;
+		diag.Height = 144;
+		var html = [];
+		html.push('<div class="ui-dialog-box">');
+		html.push('<div class="modify-password">');
+		html.push('<span class="attr-name">　' + js_newPassword + '：</span>');
+		html
+				.push('<input maxlength="20" class="text" type="password" id="userpwd"/> ');
+		html.push('</div>');
+		html.push('<div class="modify-password">');
+		html.push('<span class="attr-name">' + js_confirmPassword + '</span>');
+		html
+				.push('<input maxlength="20" class="text" type="password" id="userpwd2"/> ');
+		html.push('</div>');
+		html.push('</div>');
+		diag.InnerHtml = html.join('');
+		diag.OKEvent = function() {
+
+			var userpwd = $id("userpwd").value.trim();
+			var userpwd2 = $id("userpwd2").value.trim();
+			if (userpwd.length > 0 && userpwd2.length > 0) {
+				//强密码认证strongPassword
+				var numasc = 0;
+				var charasc = 0;
+				var otherasc = 0;
+				var ispass = 1;
+				if (userpwd.length < 8 && strongPassword) {
+					Dialog.alert('密码必须包含数字和字母，且长度必须大于8位');
+					return false;
+				} else {
+					for (var i = 0; i < userpwd.length; i++) {
+						var asciiNumber = userpwd.substr(i, 1).charCodeAt();
+						if (asciiNumber >= 48 && asciiNumber <= 57) {
+							numasc += 1;
+						}
+						if ((asciiNumber >= 65 && asciiNumber <= 90)
+								|| (asciiNumber >= 97 && asciiNumber <= 122)) {
+							charasc += 1;
+						}
+						if ((asciiNumber >= 33 && asciiNumber <= 47)
+								|| (asciiNumber >= 58 && asciiNumber <= 64)
+								|| (asciiNumber >= 91 && asciiNumber <= 96)
+								|| (asciiNumber >= 123 && asciiNumber <= 126)) {
+							otherasc += 1;
+						}
+					}
+					if (0 == numasc && strongPassword) {
+						Dialog.alert('密码必须包含数字和字母，且长度必须大于8位');
+						return false;
+					} else if (0 == charasc && strongPassword) {
+						Dialog.alert('密码必须包含数字和字母，且长度必须大于8位');
+						return false;
+					} else {
+						//return true;
+						ispass = 1;
+					}
+				}
+				if (userpwd2 == userpwd && ispass) {
+					var b = new Base64();
+					var oldpwd = 1;
+					userpwd = b.encode(userpwd);
+					$
+							.ajax({
+								type : "POST",
+								url : "/ajax/ajaxModifyPassword.action",
+								data : "resetPwd=1&userid="
+										+ userid
+										+ "&oldpwd="
+										+ encodeURIComponent(encodeURIComponent(oldpwd))
+										+ "&newpwd="
+										+ encodeURIComponent(encodeURIComponent(userpwd))
+										+ "&encrypt=BASE",
+								dataType : "json",
+								success : function(msg) {
+									if ("SUCCESS" == msg.status) {
+										Dialog
+												.alert(
+														''
+																+ js_passwordIsChanged,
+														function() {
+															//window.location.reload();//成功
+															diag.close();
+															window.location.href = "/disk/myFileList.action";
+														});
+									} else {
+										Dialog.alert(msg.msg);
+									}
+								}
+							});
+				} else {
+					Dialog.alert(js_twoPwdNotConsistent + ","
+							+ js_pleaseInputAgain);//'确认密码与新密码不一致，请重新输入');
+				}
+			}
+
+			else if (userpwd.length < 1) {
+				Dialog.alert(js_pleaseInput + js_newPassword, function() {
+					$id("userpwd").focus();
+				});//'请输入新密码！');
+
+			} else if (userpwd2.length < 1) {
+				Dialog.alert(js_pleaseInput + js_confirmPassword, function() {
+					$id("userpwd2").focus();
+				});//'请输入确认密码！');
+
+			}
+		};
+		diag.show();
+	}
